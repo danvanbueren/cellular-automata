@@ -101,7 +101,13 @@ Because `tauri-apps/tauri-action` reads the release version directly from `tauri
    git push origin v1.0.0
    ```
 
-> **Note on Code Signing**: Unless Apple Developer ID and Windows Authenticode certificates are configured in GitHub Secrets, release installers are built unsigned. End users downloading them from a browser may need to bypass macOS Gatekeeper (*Right-Click -> Open* or *System Settings -> Privacy & Security*) or Windows SmartScreen (*More info -> Run anyway*).
+> **Note on Code Signing**: Unless paid Apple Developer ID and Windows Authenticode certificates are configured in GitHub Secrets, release installers are built with ad-hoc/unsigned signatures. When downloading a release from a browser:
+> - **macOS**: Chrome/Safari attaches a `com.apple.quarantine` flag to downloaded `.dmg` files, causing Gatekeeper to report that an unnotarized app *"is damaged and can't be opened"* or *"Apple could not verify..."*. After dragging `Cellular Automata.app` to `/Applications`, clear the quarantine flag in Terminal:
+>   ```sh
+>   xattr -cr "/Applications/Cellular Automata.app"
+>   ```
+>   *(Or open **System Settings -> Privacy & Security**, scroll down to the blocked app message, and click **Open Anyway**.)*
+> - **Windows**: In the SmartScreen prompt, click **More info -> Run anyway**.
 
 ---
 
