@@ -44,6 +44,7 @@ Inspiration reference: *Artificial Life* by Emergent Garden (YouTube: https://ww
 - **Thin `main.rs`, Fat `lib.rs` Pattern**: Following Rust Book and Tauri v2 conventions, `src/lib.rs` declares the module tree (`pub mod universe; pub mod commands;`) and exports `pub fn run()`. `src/main.rs` simply calls `cellular_automata::run()`. This prevents Cargo from compiling `universe.rs` twice across library and binary targets.
 - **Zero-Bundler Vanilla Frontend**: `tauri.conf.json` sets `"withGlobalTauri": true` and `"frontendDist": "./www"`, injecting `window.__TAURI__.core.invoke` directly into vanilla JavaScript without `npm`, `vite`, or `node_modules`.
 - **Browser / WebView Support Policy**: Target native OS WebViews (macOS WKWebView / Safari 17.4+, Windows WebView2, Linux WebKitGTK). Do not add legacy browser polyfills or heavy frontend dependencies.
+- **Automated Cross-Platform Releases**: `.github/workflows/release.yml` uses `tauri-apps/tauri-action@v1` to build and publish native installers for macOS (`aarch64` & `x86_64`), Windows, and Ubuntu Linux whenever a `v*` tag is pushed or triggered via `workflow_dispatch`.
 
 ### 2. Tauri IPC & State Management
 - **Hexagonal Domain Isolation**: Keep `src/universe.rs` 100% free of `tauri` imports so core simulation logic remains pure standard-library Rust, fast to unit test, and portable if a web backup target is ever added in the future.

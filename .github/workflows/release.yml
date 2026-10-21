@@ -1,0 +1,62 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # Apple Silicon (M1/M2/M3/M4)
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest' # Intel Mac
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04' # Linux (.deb, .rpm, .AppImage)
+            args: ''
+          - platform: 'windows-latest' # Windows (.msi, -setup.exe)
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (used by tauri-action CLI runner)
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust Cargo build artifacts
+        uses: swatinem/rust-cache@v2
+
+      - name: Install Linux WebKitGTK system dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Build and publish Tauri bundles to GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Cellular Automata v__VERSION__'
+          releaseBody: 'Download the native desktop installer for your operating system below (`macOS .dmg`, `Windows -setup.exe / .msi`, or `Linux .deb / .AppImage`).'
+          generateReleaseNotes: true
+          releaseDraft: false
+          prerelease: false
+          retryAttempts: 2
+          args: ${{ matrix.args }}

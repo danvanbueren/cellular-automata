@@ -78,6 +78,13 @@ cargo build --release
 cargo tauri build
 ```
 
+### Multi-Platform GitHub Releases (CI/CD)
+Pushing a version tag matching `v*` triggers `.github/workflows/release.yml`, which automatically builds native installers for **macOS (Apple Silicon & Intel)**, **Windows (`.msi` & `-setup.exe`)**, and **Linux (`.deb`, `.rpm`, & `.AppImage`)** and publishes them to GitHub Releases:
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ---
 
 ## 5. Architecture & Technical Design
@@ -152,6 +159,9 @@ Coordinates wrap across edges using unsigned modular arithmetic (`(coord + dimen
 
 ```
 cellular-automata/
+├── .github/
+│   └── workflows/
+│       └── release.yml     # Automated macOS, Windows, and Linux release pipeline
 ├── Cargo.toml              # Rust package configuration and Tauri v2 dependencies
 ├── build.rs                # Cargo build script invoking tauri_build
 ├── tauri.conf.json         # Tauri v2 window, bundle, and frontend configuration
