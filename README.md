@@ -1,4 +1,4 @@
-# Emergent Life: Cellular Automata in Rust
+# [Cellular Automata](https://github.com/danvanbueren/cellular-automata) &middot; [![License](https://img.shields.io/badge/license-GPLv3-blue)](https://github.com/danvanbueren/cellular-automata/blob/main/LICENSE) [![Repo Size](https://img.shields.io/github/repo-size/danvanbueren/cellular-automata?color=blue)](https://github.com/danvanbueren/cellular-automata) [![Issues](https://img.shields.io/github/issues/danvanbueren/cellular-automata)](https://github.com/danvanbueren/cellular-automata/issues) [![Last Commit](https://img.shields.io/github/last-commit/danvanbueren/cellular-automata)](https://github.com/danvanbueren/cellular-automata/commits/main/)
 
 A high-performance desktop cellular automata simulation exploring emergent artificial life, multi-species genetic inheritance, and biological aging. Built with a native Rust simulation engine and rendered through a lightweight **Tauri v2** desktop frontend.
 

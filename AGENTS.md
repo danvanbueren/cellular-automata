@@ -19,14 +19,16 @@ Inspiration reference: *Artificial Life* by Emergent Garden (YouTube: https://ww
 - **Tone & Formatting**:
   - Keep documentation, chat, and markdown clean, functional, and professional.
   - Do not use spammy emojis or fluff. Follow standard GitHub Markdown rules.
-  - **README Structure**: Maintain a hyperlinked Table of Contents at the top, followed strictly by:
-    1. Overview
-    2. Build Requirements
-    3. Quick Start
-    4. Additional Commands
-    5. Architecture & Technical Design
-    6. Features & Controls
-    7. Project Structure (Tree diagram at the end).
+  - **README Structure**:
+    - Use a concise project title in the H1 heading with Shields.io badges (`# [Cellular Automata](...) &middot; [![License](...)] [![Repo Size](...)] [![Issues](...)] [![Last Commit](...)]`)—do not add extra subtitles or fluff to the H1 title.
+    - Maintain a hyperlinked Table of Contents at the top, followed strictly by:
+      1. Overview
+      2. Build Requirements
+      3. Quick Start
+      4. Additional Commands
+      5. Architecture & Technical Design
+      6. Features & Controls
+      7. Project Structure (Tree diagram at the end).
 
 ---
 
