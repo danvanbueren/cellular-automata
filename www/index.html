@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cellular-automata</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Fullscreen Dual Canvas Layers: Background Bloom Glow + Foreground Crisp Cells -->
+  <canvas id="bloom-canvas"></canvas>
+  <canvas id="life-canvas"></canvas>
+
+  <!-- Overlay UI Layer -->
+  <div class="ui-overlay">
+    <!-- Bottom Floating Dock HUD -->
+    <footer class="hud-panel">
+      <!-- Top Row: Interactive Icon Controls & Telemetry -->
+      <div class="hud-controls-row">
+        <!-- Playback Controls -->
+        <div class="hud-group">
+          <button id="play-pause" class="btn icon-btn btn-primary">
+            <svg id="pause-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16"/>
+              <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+            <svg id="play-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="display: none;">
+              <polygon points="6,4 20,12 6,20"/>
+            </svg>
+          </button>
+
+          <button id="step-btn" class="btn icon-btn" disabled>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+              <polygon points="5,4 15,12 5,20"/>
+              <rect x="16" y="4" width="3" height="16"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Reset & Clear Actions -->
+        <div class="hud-group">
+          <button id="random-btn" class="btn icon-btn">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+            </svg>
+          </button>
+
+          <button id="clear-btn" class="btn icon-btn">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <line x1="10" y1="11" x2="10" y2="17"/>
+              <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Genesis & Tuning Group (No Divider Between Genesis and Toggles) -->
+        <div class="hud-group">
+          <!-- Void Genesis Cosmic Spark Icon Button -->
+          <button id="genesis-btn" class="btn icon-btn toggle-btn active">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M4.93 19.07l14.14-14.14"/>
+            </svg>
+          </button>
+
+          <!-- Speed 3-State Animal Toggle (Tortoise, Hare, Cheetah) -->
+          <button id="speed-btn" class="btn icon-btn">
+            <!-- Slow: Tortoise -->
+            <svg id="speed-icon-slow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+              <path d="M5 14c0-4.4 3.1-8 7-8s7 3.6 7 8H5z"/>
+              <path d="M12 6v8M8 10h8"/>
+              <path d="M19 13a2 2 0 1 1 0 2"/>
+              <path d="M7 14v3M17 14v3"/>
+              <path d="M5 14l-2 1"/>
+            </svg>
+            <!-- Medium: Hare -->
+            <svg id="speed-icon-med" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 3c0 3-1 6-2 8M16 4c0 3-1 5-2 7"/>
+              <path d="M7 17a4 4 0 0 1 4-4h3l3 2a2 2 0 0 1 0 3H7z"/>
+              <circle cx="15" cy="11" r="2.5"/>
+              <path d="M17 18v2M9 17v3"/>
+              <circle cx="5" cy="15" r="1.5"/>
+            </svg>
+            <!-- Fast: Cheetah Sprint -->
+            <svg id="speed-icon-fast" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+              <path d="M6 13c3-2 8-2 12-1"/>
+              <circle cx="19" cy="10" r="2"/>
+              <path d="M18 12l3 4"/>
+              <path d="M6 13l-3 4"/>
+              <path d="M6 13c-2 0-3-2-4-2"/>
+              <path d="M1 8h4M2 17h3"/>
+            </svg>
+          </button>
+
+          <!-- Lifespan 3-State Biological Toggle (Sprout, Leaf, Infinity) -->
+          <button id="lifespan-btn" class="btn icon-btn">
+            <!-- Short: Young Sprout -->
+            <svg id="life-icon-short" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+              <path d="M12 21v-7"/>
+              <path d="M12 14c-4 0-6-3-6-6 4 0 6 3 6 6z"/>
+              <path d="M12 14c4 0 6-3 6-6-4 0-6 3-6 6z"/>
+              <path d="M8 21h8"/>
+            </svg>
+            <!-- Medium: Flourishing Leaf -->
+            <svg id="life-icon-med" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 20A7 7 0 0 1 4 13c0-4.5 3.5-8 8.5-9 5.5 0 7.5 3.5 7.5 7.5 0 5-4.5 8.5-9 8.5z"/>
+              <path d="M11 11l5-5M11 11l-3 4"/>
+              <path d="M11 20l-1 2"/>
+            </svg>
+            <!-- Long: Eternal Infinity -->
+            <svg id="life-icon-long" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+              <path d="M18.18 8.4A4.5 4.5 0 0 0 12 12a4.5 4.5 0 0 0-6.18-3.6 4.5 4.5 0 0 0 0 7.2A4.5 4.5 0 0 0 12 12a4.5 4.5 0 0 0 6.18 3.6 4.5 4.5 0 0 0 0-7.2z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- In-Line Fixed-Width Telemetry Badges (Dark Gray Zero-Padded) -->
+        <div class="hud-group telemetry-group">
+          <div id="gen-box" class="telemetry-box">
+            <span class="telemetry-label">GEN</span>
+            <span id="gen-count" class="telemetry-value"><span class="lead-zero">00000</span><span class="active-digits">0</span></span>
+          </div>
+          <div id="pop-box" class="telemetry-box">
+            <span class="telemetry-label">POP</span>
+            <span id="alive-count" class="telemetry-value"><span class="lead-zero">00000</span><span class="active-digits">0</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Centered Dynamic Helper Line -->
+      <div class="hud-helper-row">
+        <span id="hud-helper" class="hud-helper-text">danvanbueren/cellular-automata</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="index.js"></script>
+</body>
+</html>
