@@ -2,19 +2,21 @@
 name = "cellular-automata"
 version = "0.1.0"
 edition = "2024"
+default-run = "cellular-desktop"
 
 [lib]
 name = "cellular_automata"
-crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
 
-# Name the desktop executable distinctly to avoid Windows .pdb symbol collisions
+# Name the desktop executable distinctly to avoid Windows MSVC .pdb symbol collisions
 [[bin]]
 name = "cellular-desktop"
 path = "src/main.rs"
 
-[dependencies]
-wasm-bindgen = "0.2"
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
 
-# Only compile minifb when building for desktop OS, not for WebAssembly
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-minifb = "0.29.0"
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

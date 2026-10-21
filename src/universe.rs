@@ -1,15 +1,23 @@
 //! Universe Module: Artificial Life with Genetic Color Blending & Spontaneous Genesis
 //!
-//! Each cell carries biological RGB genes and an age.
-//! When parent cells reproduce, their colors blend together to produce
-//! hybrid offspring. In large voids of blank space, spontaneous genesis
-//! sparks new colonies with fresh genetic lineages.
-
-use wasm_bindgen::prelude::*;
+//! This module contains the pure, platform-agnostic simulation engine.
+//! It has zero dependencies on any windowing or UI framework (`tauri`, `wasm`, etc.),
+//! following Rust's "Hexagonal Architecture" principle so domain logic remains
+//! fast, portable, and trivially testable via `cargo test`.
+//!
+//! Each cell carries biological RGB genes and an age. When parent cells reproduce,
+//! their colors blend together to produce hybrid offspring. In large voids of
+//! blank space, spontaneous genesis sparks new colonies with fresh genetic lineages.
 
 /// Packed 4-byte Cell representation.
-/// `#[repr(C)]` guarantees exact byte ordering in memory:
-/// [r, g, b, age] perfectly aligned to 32-bit boundaries.
+///
+/// `#[repr(C)]` instructs the Rust compiler to lay out the fields in memory
+/// in the exact order declared (`[r, g, b, age]`), aligned to 32-bit (4-byte)
+/// boundaries without reordering fields.
+///
+/// `#[derive(Clone, Copy, Debug, PartialEq)]` automatically implements:
+/// - `Copy` & `Clone`: Passing a `Cell` copies its 4 bytes on the stack (like a primitive `u32`),
+///   avoiding heap allocations or ownership moves.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cell {
@@ -20,74 +28,39 @@ pub struct Cell {
 }
 
 impl Cell {
+    /// Constant representing an empty/dead cell in the grid.
     pub const DEAD: Cell = Cell { r: 0, g: 0, b: 0, age: 0 };
 
+    /// Returns `true` if the cell is currently alive (`age > 0`).
     #[inline]
     pub fn is_alive(&self) -> bool {
         self.age > 0
     }
 }
 
-#[wasm_bindgen]
+/// The 2D toroidal simulation grid and internal pseudo-random state.
+///
+/// Rather than using a 2D nested vector (`Vec<Vec<Cell>>`), which scatters rows
+/// across separate heap allocations, `Universe` flattens the grid into a single
+/// contiguous `Vec<Cell>` for maximum CPU cache locality.
 pub struct Universe {
     width: usize,
     height: usize,
-    // Flattened 2D grid: 4 bytes per cell [r, g, b, age, ...]
+    /// Flattened 2D grid: 4 bytes per cell `[r, g, b, age, ...]`
     cells: Vec<Cell>,
-    // Internal seed for spontaneous genesis and genetic mutations
+    /// Internal seed for spontaneous genesis and genetic mutations
     rng_state: u64,
 }
 
-// =============================================================================
-// Internal Rust Helper Methods (Not exported across the Wasm boundary)
-// =============================================================================
 impl Universe {
-    /// Translates (col, row) into a 1D vector index
-    #[inline]
-    pub fn get_index(&self, col: usize, row: usize) -> usize {
-        row * self.width + col
-    }
-
-    /// Accesses a cell by value (used by desktop renderer and unit tests)
-    #[inline]
-    pub fn cell_at(&self, col: usize, row: usize) -> Cell {
-        let idx = self.get_index(col, row);
-        self.cells[idx]
-    }
-
-    /// Fast pseudo-random number generator (XorShift64)
-    fn next_random(&mut self) -> u64 {
-        self.rng_state ^= self.rng_state << 13;
-        self.rng_state ^= self.rng_state >> 7;
-        self.rng_state ^= self.rng_state << 17;
-        self.rng_state
-    }
-
-    /// Checks if a massive 17x17 region centered at (col, row) is completely empty void (radius 8).
-    fn is_massive_blank_space(&self, col: usize, row: usize) -> bool {
-        let h = self.height as i32;
-        let w = self.width as i32;
-
-        for dy in -8i32..=8i32 {
-            for dx in -8i32..=8i32 {
-                let check_row = ((row as i32 + dy).rem_euclid(h)) as usize;
-                let check_col = ((col as i32 + dx).rem_euclid(w)) as usize;
-                if self.cells[self.get_index(check_col, check_row)].is_alive() {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-}
-
-// =============================================================================
-// WebAssembly Exported Methods (Callable from JavaScript)
-// =============================================================================
-#[wasm_bindgen]
-impl Universe {
-    #[wasm_bindgen(constructor)]
+    /// Creates a new universe of `width × height` dead cells.
+    ///
+    /// Dimensions are clamped to a minimum of `1 × 1` to guarantee that modular
+    /// arithmetic (`% width`) and unsigned neighbor wrapping (`width - 1`) can
+    /// never divide by zero or underflow.
     pub fn new(width: usize, height: usize) -> Universe {
+        let width = width.max(1);
+        let height = height.max(1);
         let cells = vec![Cell::DEAD; width * height];
         Universe {
             width,
@@ -97,16 +70,55 @@ impl Universe {
         }
     }
 
+    /// Returns the grid width in cells.
+    #[inline]
     pub fn width(&self) -> usize {
         self.width
     }
 
+    /// Returns the grid height in cells.
+    #[inline]
     pub fn height(&self) -> usize {
         self.height
     }
 
+    /// Translates 2D `(col, row)` coordinates into a 1D vector index.
+    #[inline]
+    pub fn get_index(&self, col: usize, row: usize) -> usize {
+        row * self.width + col
+    }
+
+    /// Accesses a cell by value at `(col, row)`.
+    /// Returns [`Cell::DEAD`] safely if coordinates are out of bounds.
+    #[inline]
+    pub fn cell_at(&self, col: usize, row: usize) -> Cell {
+        if col < self.width && row < self.height {
+            let idx = self.get_index(col, row);
+            self.cells[idx]
+        } else {
+            Cell::DEAD
+        }
+    }
+
+    /// Serializes the entire cell grid into a flat `Vec<u8>` byte buffer
+    /// (`[r, g, b, age, r, g, b, age, ...]`, totaling `width * height * 4` bytes).
+    ///
+    /// Used by the Tauri IPC layer to stream raw binary frame buffers directly
+    /// to the frontend canvas `Uint8Array` without JSON serialization overhead.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(self.cells.len() * 4);
+        for cell in &self.cells {
+            bytes.extend_from_slice(&[cell.r, cell.g, cell.b, cell.age]);
+        }
+        bytes
+    }
+
     /// Resizes the universe grid dynamically, preserving existing living cells within bounds.
+    /// Clamps dimensions to at least `1 × 1`.
     pub fn resize(&mut self, new_width: usize, new_height: usize) {
+        let new_width = new_width.max(1);
+        let new_height = new_height.max(1);
+
         if new_width == self.width && new_height == self.height {
             return;
         }
@@ -128,16 +140,13 @@ impl Universe {
         self.cells = new_cells;
     }
 
-    /// Returns a raw pointer to the cell buffer in Wasm linear memory.
-    /// Total bytes: `width * height * 4`.
-    pub fn cells_ptr(&self) -> *const Cell {
-        self.cells.as_ptr()
-    }
-
     /// Sets a cell with a specific RGB color gene and resets its age to 1.
+    /// Ignores out-of-bounds coordinates safely.
     pub fn set_cell(&mut self, col: usize, row: usize, r: u8, g: u8, b: u8) {
-        let idx = self.get_index(col, row);
-        self.cells[idx] = Cell { r, g, b, age: 1 };
+        if col < self.width && row < self.height {
+            let idx = self.get_index(col, row);
+            self.cells[idx] = Cell { r, g, b, age: 1 };
+        }
     }
 
     /// Clears the entire board to empty void.
@@ -147,15 +156,19 @@ impl Universe {
         }
     }
 
-    /// Populates with a multi-species primordial soup.
+    /// Populates the grid with a multi-species primordial soup.
+    ///
+    /// Note on Rust's Borrow Checker: We use a local `rng` variable during the
+    /// mutable iteration over `&mut self.cells` rather than calling `self.next_random()`,
+    /// because Rust prevents borrowing `self` mutably twice at the same time.
     pub fn populate_random(&mut self, seed: u64, density: f32) {
         let mut rng = seed.max(1);
         let threshold = (density.clamp(0.0, 1.0) * 1000.0) as u64;
 
         // Base ancestral species colors
         let species = [
-            (0, 229, 255), // Cyan Nebula
-            (0, 255, 157), // Neon Emerald
+            (0, 229, 255),  // Cyan Nebula
+            (0, 255, 157),  // Neon Emerald
             (255, 42, 133), // Cyber Magenta
             (255, 183, 0),  // Solar Amber
         ];
@@ -174,7 +187,7 @@ impl Universe {
             }
         }
 
-        self.rng_state = rng;
+        self.rng_state = rng.max(1);
     }
 
     /// Spawns a glider carrying a specific RGB color lineage.
@@ -194,6 +207,7 @@ impl Universe {
     /// - Blends RGB genetic colors of the 3 parents when reproducing.
     /// - Checks for large voids and spontaneously ignites new seedling colonies.
     pub fn tick(&mut self, max_age: u8, enable_genesis: bool) {
+        let max_age = max_age.max(1);
         let mut next_cells = self.cells.clone();
 
         for row in 0..self.height {
@@ -228,36 +242,34 @@ impl Universe {
                     let survives_age = current_cell.age < max_age;
 
                     if survives_neighbors && survives_age {
-                        // Cell survives and ages by 1 generation
+                        // Cell survives and ages by 1 generation (saturating_add prevents u8 overflow)
                         next_cells[idx] = Cell {
                             r: current_cell.r,
                             g: current_cell.g,
                             b: current_cell.b,
-                            age: current_cell.age + 1,
+                            age: current_cell.age.saturating_add(1),
                         };
                     } else {
                         // Perishes of under/overpopulation or old age
                         next_cells[idx] = Cell::DEAD;
                     }
-                } else {
+                } else if live_neighbor_count == 3 {
                     // Reproduction: Conway Rule (exactly 3 living neighbors)
-                    if live_neighbor_count == 3 {
-                        let p1 = parent_cells[0];
-                        let p2 = parent_cells[1];
-                        let p3 = parent_cells[2];
+                    let p1 = parent_cells[0];
+                    let p2 = parent_cells[1];
+                    let p3 = parent_cells[2];
 
-                        // Genetic Color Blending: Average parent RGB values
-                        let blended_r = ((p1.r as u32 + p2.r as u32 + p3.r as u32) / 3) as u8;
-                        let blended_g = ((p1.g as u32 + p2.g as u32 + p3.g as u32) / 3) as u8;
-                        let blended_b = ((p1.b as u32 + p2.b as u32 + p3.b as u32) / 3) as u8;
+                    // Genetic Color Blending: Average parent RGB values
+                    let blended_r = ((p1.r as u32 + p2.r as u32 + p3.r as u32) / 3) as u8;
+                    let blended_g = ((p1.g as u32 + p2.g as u32 + p3.g as u32) / 3) as u8;
+                    let blended_b = ((p1.b as u32 + p2.b as u32 + p3.b as u32) / 3) as u8;
 
-                        next_cells[idx] = Cell {
-                            r: blended_r,
-                            g: blended_g,
-                            b: blended_b,
-                            age: 1, // Newborn
-                        };
-                    }
+                    next_cells[idx] = Cell {
+                        r: blended_r,
+                        g: blended_g,
+                        b: blended_b,
+                        age: 1, // Newborn
+                    };
                 }
             }
         }
@@ -293,6 +305,35 @@ impl Universe {
         }
 
         self.cells = next_cells;
+    }
+
+    /// Fast pseudo-random number generator (XorShift64).
+    /// Guards against the 0-state trap where bitwise shifts on 0 would yield 0 forever.
+    fn next_random(&mut self) -> u64 {
+        if self.rng_state == 0 {
+            self.rng_state = 88888888;
+        }
+        self.rng_state ^= self.rng_state << 13;
+        self.rng_state ^= self.rng_state >> 7;
+        self.rng_state ^= self.rng_state << 17;
+        self.rng_state
+    }
+
+    /// Checks if a massive 17x17 region centered at `(col, row)` is completely empty void (radius 8).
+    fn is_massive_blank_space(&self, col: usize, row: usize) -> bool {
+        let h = self.height as i32;
+        let w = self.width as i32;
+
+        for dy in -8i32..=8i32 {
+            for dx in -8i32..=8i32 {
+                let check_row = ((row as i32 + dy).rem_euclid(h)) as usize;
+                let check_col = ((col as i32 + dx).rem_euclid(w)) as usize;
+                if self.cells[self.get_index(check_col, check_row)].is_alive() {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 
@@ -358,5 +399,52 @@ mod tests {
 
         // Newly added space is dead void
         assert!(!universe.cell_at(8, 8).is_alive());
+    }
+
+    #[test]
+    fn test_to_bytes_serialization() {
+        let mut universe = Universe::new(2, 2);
+        universe.set_cell(1, 0, 12, 34, 56);
+
+        let bytes = universe.to_bytes();
+        assert_eq!(bytes.len(), 2 * 2 * 4);
+        // Cell at (1, 0) is index 1 -> byte offset 4..8
+        assert_eq!(&bytes[4..8], &[12, 34, 56, 1]);
+    }
+
+    #[test]
+    fn test_zero_dimension_and_bounds_safety() {
+        // Clamps 0x0 to 1x1 without panicking on underflow or modulo-by-zero
+        let mut universe = Universe::new(0, 0);
+        assert_eq!(universe.width(), 1);
+        assert_eq!(universe.height(), 1);
+
+        // Out-of-bounds set_cell and cell_at should never panic
+        universe.set_cell(100, 100, 255, 255, 255);
+        assert_eq!(universe.cell_at(100, 100), Cell::DEAD);
+
+        // Tick and resize(0, 0) on 1x1 universe should never underflow
+        universe.tick(0, true);
+        universe.resize(0, 0);
+        assert_eq!(universe.width(), 1);
+        assert_eq!(universe.height(), 1);
+    }
+
+    #[test]
+    fn test_aging_and_max_age_death() {
+        let mut universe = Universe::new(5, 5);
+        // 2x2 block is a still-life (every cell has 3 neighbors)
+        universe.set_cell(1, 1, 0, 229, 255);
+        universe.set_cell(2, 1, 0, 229, 255);
+        universe.set_cell(1, 2, 0, 229, 255);
+        universe.set_cell(2, 2, 0, 229, 255);
+
+        // Tick 1 with max_age = 2 -> age becomes 2
+        universe.tick(2, false);
+        assert_eq!(universe.cell_at(1, 1).age, 2);
+
+        // Tick 2 with max_age = 2 -> cell reaches max_age and perishes
+        universe.tick(2, false);
+        assert!(!universe.cell_at(1, 1).is_alive());
     }
 }
