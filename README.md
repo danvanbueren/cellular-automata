@@ -79,11 +79,29 @@ cargo tauri build
 ```
 
 ### Multi-Platform GitHub Releases (CI/CD)
-Pushing a version tag matching `v*` triggers `.github/workflows/release.yml`, which automatically builds native installers for **macOS (Apple Silicon & Intel)**, **Windows (`.msi` & `-setup.exe`)**, and **Linux (`.deb`, `.rpm`, & `.AppImage`)** and publishes them to GitHub Releases:
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
+Pushing a version tag matching `v*` (or running the workflow manually from the GitHub Actions tab) triggers `.github/workflows/release.yml`, which builds native installers for **macOS (Apple Silicon & Intel)**, **Windows (`.msi` & `-setup.exe`)**, and **Linux (`.deb`, `.rpm`, & `.AppImage`)** and publishes them to GitHub Releases.
+
+Because `tauri-apps/tauri-action` reads the release version directly from `tauri.conf.json` and `Cargo.toml` to name the installers and GitHub Release tag (`v__VERSION__`), always commit and push your version bump **before** creating the Git tag:
+
+1. **Update the version number** (e.g., `"1.0.0"`) in both `Cargo.toml` and `tauri.conf.json`.
+   *(Tip: In Tauri v2, `"version"` in `tauri.conf.json` is optional; if omitted, Tauri inherits the version directly from `Cargo.toml` as a single source of truth.)*
+2. **Sync `Cargo.lock`** with the updated package version:
+   ```sh
+   cargo check
+   ```
+3. **Commit and push the version bump to `main`**:
+   ```sh
+   git add Cargo.toml Cargo.lock tauri.conf.json
+   git commit -m "chore: bump version to 1.0.0"
+   git push origin main
+   ```
+4. **Create and push the matching `v*` tag** to trigger the release build:
+   ```sh
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+> **Note on Code Signing**: Unless Apple Developer ID and Windows Authenticode certificates are configured in GitHub Secrets, release installers are built unsigned. End users downloading them from a browser may need to bypass macOS Gatekeeper (*Right-Click -> Open* or *System Settings -> Privacy & Security*) or Windows SmartScreen (*More info -> Run anyway*).
 
 ---
 
